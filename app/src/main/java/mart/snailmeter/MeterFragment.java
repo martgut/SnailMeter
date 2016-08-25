@@ -2,6 +2,7 @@ package mart.snailmeter;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -11,6 +12,14 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 
 /**
@@ -52,6 +61,7 @@ public class MeterFragment extends Fragment {
         args.putString(ARG_PARAM1, param1);
         args.putString(ARG_PARAM2, param2);
         fragment.setArguments(args);
+
         return fragment;
     }
 
@@ -75,6 +85,10 @@ public class MeterFragment extends Fragment {
         int id=item.getItemId();
         if (id==R.id.action_getdata){
             Log.d("MART", this.getClass().getSimpleName()+":GetData");
+
+            GetPerfData gpd = new GetPerfData();
+            gpd.execute();
+
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -127,4 +141,76 @@ public class MeterFragment extends Fragment {
         void onFragmentInteraction(Uri uri);
     }
 
+    public class GetPerfData extends AsyncTask<Void, Void, String> {
+
+        @Override
+        protected String doInBackground(Void... voids) {
+
+            HttpURLConnection conn = null;
+            BufferedReader reader = null;
+
+            // Will contain the raw JSON response as a string.
+            String forecastJsonStr = null;
+
+            try {
+                URL url = new URL("http://martgut.alfahosting.org/plogger/plogger.php");
+
+                // Create the request to OpenWeatherMap, and open the connection
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.connect();
+
+                // Read the input stream into a String
+                InputStream is = conn.getInputStream();
+                StringBuffer buffer = new StringBuffer();
+                if (is == null) {
+                    // Nothing to do.
+                    forecastJsonStr = null;
+                }
+                reader = new BufferedReader(new InputStreamReader(is));
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    // Since it's JSON, adding a newline isn't necessary (it won't affect parsing)
+                    // But it does make debugging a *lot* easier if you print out the completed
+                    // buffer for debugging.
+                    buffer.append(line + "\n");
+                }
+
+                if (buffer.length() == 0) {
+                    // Stream was empty.  No point in parsing.
+                    forecastJsonStr = null;
+                }
+                forecastJsonStr = buffer.toString();
+
+            } catch (IOException e) {
+                Log.e("PlaceholderFragment", "Error ", e);
+                // If the code didn't successfully get the weather data, there's no point in attempting
+                // to parse it.
+                forecastJsonStr = null;
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+                if (reader != null) {
+                    try {
+                        reader.close();
+                    } catch (final IOException e) {
+                        Log.e("PlaceholderFragment", "Error closing stream", e);
+                    }
+                }
+
+                return forecastJsonStr;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            super.onPostExecute(result);
+
+            Log.d("MART", GetPerfData.class.getSimpleName() + result);
+            TextView tv = (TextView) getView().findViewById(R.id.meter_text);
+            tv.setText(result);
+        }
+    }
 }
